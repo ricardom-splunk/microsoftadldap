@@ -1475,6 +1475,124 @@
                 "title": "Rename Object"
             },
             "versions": "EQ(*)"
+        },
+        {
+            "action": "add user",
+            "identifier": "add_user",
+            "description": "Create a new user in Active Directory",
+            "verbose": "This action creates a new user account in Active Directory with the specified attributes. The user_dn parameter must specify the full distinguished name where the user will be created.",
+            "type": "generic",
+            "read_only": false,
+            "parameters": {
+                "user_dn": {
+                    "description": "Distinguished name for the new user (e.g., CN=John Doe,OU=Users,DC=company,DC=com)",
+                    "data_type": "string",
+                    "required": true,
+                    "primary": true,
+                    "contains": [
+                        "ad distinguished name"
+                    ],
+                    "order": 0
+                },
+                "samaccountname": {
+                    "description": "SAM account name for the new user",
+                    "data_type": "string",
+                    "required": true,
+                    "contains": [
+                        "ad samaccountname"
+                    ],
+                    "order": 1
+                },
+                "user_principal_name": {
+                    "description": "User principal name (UPN) for the new user",
+                    "data_type": "string",
+                    "required": false,
+                    "contains": [
+                        "email"
+                    ],
+                    "order": 2
+                },
+                "given_name": {
+                    "description": "First name of the user",
+                    "data_type": "string",
+                    "required": false,
+                    "order": 3
+                },
+                "surname": {
+                    "description": "Last name of the user",
+                    "data_type": "string",
+                    "required": false,
+                    "order": 4
+                },
+                "display_name": {
+                    "description": "Display name for the user",
+                    "data_type": "string",
+                    "required": false,
+                    "order": 5
+                },
+                "mail": {
+                    "description": "Email address for the user",
+                    "data_type": "string",
+                    "required": false,
+                    "contains": [
+                        "email"
+                    ],
+                    "order": 6
+                },
+                "description": {
+                    "description": "Description for the user account",
+                    "data_type": "string",
+                    "required": false,
+                    "order": 7
+                },
+                "password": {
+                    "description": "Initial password for the user (optional)",
+                    "data_type": "password",
+                    "required": false,
+                    "order": 8
+                },
+                "user_account_control": {
+                    "description": "User account control flags (default: 546 - disabled account)",
+                    "data_type": "numeric",
+                    "required": false,
+                    "default": 546,
+                    "order": 9
+                }
+            },
+            "output": [
+                {
+                    "data_path": "action_result.data.*.user_dn",
+                    "data_type": "string",
+                    "contains": [
+                        "ad distinguished name"
+                    ],
+                    "column_name": "User DN",
+                    "column_order": 0
+                },
+                {
+                    "data_path": "action_result.data.*.samaccountname",
+                    "data_type": "string",
+                    "contains": [
+                        "ad samaccountname"
+                    ],
+                    "column_name": "SAM Account Name",
+                    "column_order": 1
+                },
+                {
+                    "data_path": "action_result.data.*.created",
+                    "data_type": "boolean",
+                    "column_name": "Created",
+                    "column_order": 2
+                },
+                {
+                    "data_path": "action_result.summary.created",
+                    "data_type": "boolean"
+                }
+            ],
+            "render": {
+                "type": "table"
+            },
+            "versions": "EQ(*)"
         }
     ],
     "pip39_dependencies": {

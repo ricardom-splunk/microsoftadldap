@@ -727,6 +727,92 @@ class AdLdapConnector(BaseConnector):
 
         return self._handle_account_status(param, disable=False)
 
+    def _handle_add_user(self, param):
+        """
+        This method creates a new user in Active Directory.
+        """
+        # Initialize action result and summary for tracking
+        action_result = self.add_action_result(ActionResult(dict(param)))
+        summary = action_result.update_summary({})
+        
+        # Extract required parameters
+        user_dn = param["user_dn"]  # Full DN like "CN=John Doe,OU=Users,DC=company,DC=com"
+        samaccountname = param["samaccountname"]  # Login name like "jdoe"
+        
+        # Extract optional parameters with defaults
+        user_principal_name = param.get("user_principal_name", f"{samaccountname}@{domain}")
+        given_name = param.get("given_name", "")
+        surname = param.get("surname", "")
+        display_name = param.get("display_name", f"{given_name} {surname}".strip())
+        mail = param.get("mail", "")
+        description = param.get("description", "")
+        password = param.get("password")
+        user_account_control = param.get("user_account_control", 546)  # Disabled by default
+        
+        # Prepare result data structure
+        ar_data = {
+            "user_dn": user_dn,
+            "samaccountname": samaccountname,
+            "created": False
+        }
+        
+        try:
+            # Check LDAP connection
+            if not self._ldap_bind(action_result):
+                # Set failure status and return
+                pass
+            
+            # Build attributes dictionary for user creation
+            attributes = {
+                'objectClass': ['top', 'person', 'organizationalPerson', 'user'],
+                'sAMAccountName': samaccountname,
+                'userPrincipalName': user_principal_name,
+                'userAccountControl': user_account_control
+            }
+            
+            # Add optional attributes if provided
+            if given_name:
+                attributes['givenName'] = given_name
+            if surname:
+                attributes['sn'] = surname
+            if display_name:
+                attributes['displayName'] = display_name
+            if mail:
+                attributes['mail'] = mail
+            if description:
+                attributes['description'] = description
+            
+            # Execute LDAP add operation
+            result = self._ldap_connection.add(user_dn, attributes=attributes)
+            
+            if result:
+                # User created successfully
+                ar_data["created"] = True
+                
+                # Set password if provided (separate operation)
+                if password:
+                    try:
+                        pwd_result = self._ldap_connection.extend.microsoft.modify_password(user_dn, password)
+                        # Log warning if password setting fails but user was created
+                    except Exception:
+                        # Log password setting failure but don't fail the whole operation
+                        pass
+                
+                # Return success
+                action_result.add_data(ar_data)
+                return action_result.set_status(phantom.APP_SUCCESS, "User created successfully")
+            else:
+                # User creation failed
+                ar_data["created"] = False
+                action_result.add_data(ar_data)
+                return action_result.set_status(phantom.APP_ERROR, f"Failed to create user: {ldap_error}")
+                
+        except Exception as e:
+            # Handle any exceptions during user creation
+            ar_data["created"] = False
+            action_result.add_data(ar_data)
+            return action_result.set_status(phantom.APP_ERROR, f"Error creating user: {str(e)}")
+
     def handle_action(self, param):
         ret_val = phantom.APP_SUCCESS
 
@@ -769,8 +855,13 @@ class AdLdapConnector(BaseConnector):
 
         elif action_id == "set_password":
             ret_val = self._handle_set_password(param)
+
         elif action_id == "rename_object":
             ret_val = self._handle_rename_object(param)
+
+        elif action_id == "add_user":
+            ret_val = self._handle_add_user(param)
+
 
         action_results = self.get_action_results()
         if len(action_results) > 0:
