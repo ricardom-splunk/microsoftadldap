@@ -736,11 +736,15 @@ class AdLdapConnector(BaseConnector):
         summary = action_result.update_summary({})
         
         # Extract required parameters
-        user_dn = param["user_dn"]  # Full DN like "CN=John Doe,OU=Users,DC=company,DC=com"
+        user_dn = param["user_dn"]  # Full DN like "CN=John Doe,CN=Users,DC=example,DC=local"
         samaccountname = param["samaccountname"]  # Login name like "jdoe"
         
-        # Extract optional parameters with defaults
-        user_principal_name = param.get("user_principal_name", f"{samaccountname}@{domain}")
+        # Extract optional parameters with domain for UPN
+        domain = param.get("domain")
+        if domain:
+            user_principal_name = f"{samaccountname}@{domain}"
+        else:
+            user_principal_name = ""
         given_name = param.get("given_name", "")
         surname = param.get("surname", "")
         display_name = param.get("display_name", f"{given_name} {surname}".strip())
@@ -766,11 +770,12 @@ class AdLdapConnector(BaseConnector):
             attributes = {
                 'objectClass': ['top', 'person', 'organizationalPerson', 'user'],
                 'sAMAccountName': samaccountname,
-                'userPrincipalName': user_principal_name,
                 'userAccountControl': user_account_control
             }
             
             # Add optional attributes if provided
+            if user_principal_name:
+                attributes['userPrincipalName'] = user_principal_name
             if given_name:
                 attributes['givenName'] = given_name
             if surname:
@@ -812,6 +817,50 @@ class AdLdapConnector(BaseConnector):
             ar_data["created"] = False
             action_result.add_data(ar_data)
             return action_result.set_status(phantom.APP_ERROR, f"Error creating user: {str(e)}")
+
+    def _handle_delete_user(self, param):
+        """
+        This method deletes a user from Active Directory.
+        """
+        action_result = self.add_action_result(ActionResult(dict(param)))
+        summary = action_result.update_summary({})
+
+        user = param.get("user")
+        use_samaccountname = param.get("use_samaccountname", False)
+
+        ar_data = {
+            "user": user,
+            "deleted": False
+        }
+
+        try:
+            if not self._ldap_bind(action_result):
+                action_result.add_data(ar_data)
+                return action_result.set_status(phantom.APP_ERROR, "LDAP bind failed")
+
+            # Resolve SAM account name to distinguished name if needed
+            if use_samaccountname:
+                ret_val, user_dn_dict = self._sam_to_dn([user], action_result=action_result)
+                if phantom.is_fail(ret_val) or not user_dn_dict.get(user):
+                    action_result.add_data(ar_data)
+                    return action_result.set_status(phantom.APP_ERROR, "User not found")
+                user_dn = user_dn_dict[user]
+            else:
+                user_dn = user
+
+            # Attempt to delete the user
+            result = self._ldap_connection.delete(user_dn)
+            if result:
+                ar_data["deleted"] = True
+                action_result.add_data(ar_data)
+                return action_result.set_status(phantom.APP_SUCCESS, "User deleted successfully")
+            else:
+                action_result.add_data(ar_data)
+                return action_result.set_status(phantom.APP_ERROR, f"Failed to delete user: {self._ldap_connection.result}")
+
+        except Exception as e:
+            action_result.add_data(ar_data)
+            return action_result.set_status(phantom.APP_ERROR, f"Error deleting user: {str(e)}")
 
     def handle_action(self, param):
         ret_val = phantom.APP_SUCCESS
@@ -861,6 +910,9 @@ class AdLdapConnector(BaseConnector):
 
         elif action_id == "add_user":
             ret_val = self._handle_add_user(param)
+
+        elif action_id == "delete_user":
+            ret_val = self._handle_delete_user(param)
 
 
         action_results = self.get_action_results()
